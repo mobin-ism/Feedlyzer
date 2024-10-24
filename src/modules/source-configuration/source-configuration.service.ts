@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import {
     IPaginationOptions,
@@ -17,13 +17,27 @@ export class SourceConfigurationService {
         private readonly sourceConfigurationRepository: Repository<SourceConfiguration>
     ) {}
 
+    /**
+     * CREATING A SOURCE CONFIGURATION
+     *
+     * @param   {CreateSourceConfigurationDto}  createSourceConfigurationDto  [createSourceConfigurationDto description]
+     *
+     * @return  {[type]}                                                      [return description]
+     */
     async create(createSourceConfigurationDto: CreateSourceConfigurationDto) {
-        const sourceConfiguration = new SourceConfiguration()
-        sourceConfiguration.name = createSourceConfigurationDto.name
-        sourceConfiguration.sources = createSourceConfigurationDto.sources
-        return await this.sourceConfigurationRepository.save(
-            sourceConfiguration
-        )
+        try {
+            const sourceConfiguration = new SourceConfiguration()
+            sourceConfiguration.name = createSourceConfigurationDto.name
+            sourceConfiguration.sources = createSourceConfigurationDto.sources
+            return await this.sourceConfigurationRepository.save(
+                sourceConfiguration
+            )
+        } catch (error) {
+            throw new HttpException(
+                'Failed to create source configuration',
+                HttpStatus.BAD_REQUEST
+            )
+        }
     }
 
     /**
@@ -61,16 +75,33 @@ export class SourceConfigurationService {
         )
     }
 
+    /**
+     * FIND ALL SOURCE CONFIGURATIONS
+     *
+     * @return  {[type]}  [return description]
+     */
     async findAll() {
         return await this.sourceConfigurationRepository.find()
     }
 
+    /**
+     * FIND A SOURCE CONFIGURATION
+     *
+     * @param   {string}  uuid  [uuid description]
+     *
+     * @return  {[type]}        [return description]
+     */
     async findOne(uuid: string) {
         return await this.sourceConfigurationRepository.findOne({
             where: { uuid }
         })
     }
 
+    /**
+     * UPDATING A SOURCE CONFIGURATION
+     *
+     * @return  {[type]}  [return description]
+     */
     async update(
         uuid: string,
         updateSourceConfigurationDto: UpdateSourceConfigurationDto
@@ -81,18 +112,39 @@ export class SourceConfigurationService {
             })
         sourceConfiguration.name = updateSourceConfigurationDto.name
         sourceConfiguration.sources = updateSourceConfigurationDto.sources
-        return await this.sourceConfigurationRepository.save(
-            sourceConfiguration
-        )
+        try {
+            return await this.sourceConfigurationRepository.save(
+                sourceConfiguration
+            )
+        } catch (error) {
+            throw new HttpException(
+                'Failed to update source configuration',
+                HttpStatus.BAD_REQUEST
+            )
+        }
     }
 
+    /**
+     * REMOVING A CONFIGURATION
+     *
+     * @param   {string}  uuid  [uuid description]
+     *
+     * @return  {[type]}        [return description]
+     */
     async remove(uuid: string) {
         const sourceConfiguration =
             await this.sourceConfigurationRepository.findOne({
                 where: { uuid }
             })
-        return await this.sourceConfigurationRepository.remove(
-            sourceConfiguration
-        )
+        try {
+            return await this.sourceConfigurationRepository.remove(
+                sourceConfiguration
+            )
+        } catch (error) {
+            throw new HttpException(
+                'Failed to remove source configuration',
+                HttpStatus.BAD_REQUEST
+            )
+        }
     }
 }

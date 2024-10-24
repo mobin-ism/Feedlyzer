@@ -7,6 +7,7 @@ import { SourceConfigurationService } from './source-configuration.service'
 @Module({
     imports: [TypeOrmModule.forFeature([SourceConfiguration])],
     controllers: [SourceConfigurationController],
-    providers: [SourceConfigurationService]
+    providers: [SourceConfigurationService],
+    exports: [SourceConfigurationService]
 })
 export class SourceConfigurationModule {}

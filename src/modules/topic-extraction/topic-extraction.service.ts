@@ -1,109 +1,83 @@
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import axios from 'axios'
+import * as RssParser from 'rss-parser'
+
+interface FeedItem {
+    title: string
+    description: string
+    pubDate: Date
+    sourceUrl: string
+}
 
 @Injectable()
 export class TopicExtractionService {
+    private readonly parser: RssParser
     private readonly logger = new Logger(TopicExtractionService.name)
-    private readonly huggingFaceToken: string
-    private readonly CANDIDATE_TOPICS = [
-        'politics',
-        'technology',
-        'business',
-        'sports',
-        'entertainment',
-        'health',
-        'science',
-        'education',
-        'environment',
-        'economy',
-        'world news',
-        'local news',
-        'culture',
-        'weather',
-        'crime',
-        'travel'
-    ]
+    private model: any
+    private readonly geminiToken: string
 
     constructor(private configService: ConfigService) {
-        this.huggingFaceToken =
-            this.configService.get<string>('HUGGING_FACE_TOKEN')
+        this.geminiToken = this.configService.get<string>('GEMINI_API_KEY')
+        const genAI = new GoogleGenerativeAI(this.geminiToken)
+        this.model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
+        this.parser = new RssParser()
     }
 
-    async extractTopics(text: string): Promise<string[]> {
+    async extractTopics(articleContent: string, articleTitle: string) {
         try {
-            // Truncate text to avoid payload size issues (max 2048 tokens)
-            const truncatedText = this.truncateText(text)
+            const prompt = `
+        Analyze this news article and extract the following information in JSON format:
+        1. Main topics (up to 3)
+        2. Keywords (up to 5)
+        3. Named entities (people, organizations, locations)
+        4. Category (one of: Politics, Technology, Business, Sports, Entertainment, Science, Health)
 
-            // Create sequence pairs for zero-shot classification
-            const sequences = this.CANDIDATE_TOPICS.map((topic) => ({
-                text_1: truncatedText,
-                text_2: topic
-            }))
+        Title: ${articleTitle}
+        Content: ${articleContent.substring(0, 4000)}
 
-            const response = await axios.post(
-                'https://api-inference.huggingface.co/models/cross-encoder/nli-deberta-v3-base',
-                {
-                    inputs: sequences
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${this.huggingFaceToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            )
+        Respond only with a JSON object containing these fields:
+        {
+          "topics": [],
+          "keywords": [],
+          "named_entities": {"people": [], "organizations": [], "locations": []},
+          "category": ""
+        }
+      `
 
-            // Process results and return top topics
-            const results = response.data
-            const topicScores = this.CANDIDATE_TOPICS.map((topic, index) => ({
-                topic,
-                score: Array.isArray(results) ? results[index] : 0
-            }))
-
-            return topicScores
-                .sort((a, b) => b.score - a.score)
-                .slice(0, 5)
-                .map((item) => item.topic)
+            const result = await this.model.generateContent(prompt)
+            const response = result.response
+            return JSON.parse(response.text())
         } catch (error) {
-            this.logger.error(`Error in topic extraction: ${error.message}`)
-
-            // Fallback to basic keyword extraction
-            return this.fallbackTopicExtraction(text)
+            this.logger.error(`Failed to extract topics: ${error.message}`)
+            return {
+                topics: [],
+                keywords: [],
+                named_entities: {
+                    people: [],
+                    organizations: [],
+                    locations: []
+                },
+                category: 'Unknown'
+            }
         }
     }
 
-    private truncateText(text: string): string {
-        // Truncate to roughly 2000 characters to stay within token limits
-        return text.length > 2000 ? text.substring(0, 2000) + '...' : text
-    }
-
-    private fallbackTopicExtraction(text: string): string[] {
+    async parseFeed(feedUrl: string) {
         try {
-            // Simple keyword-based fallback
-            const words = text.toLowerCase().split(/\W+/)
-            const wordFreq = new Map()
+            const feed = await this.parser.parseURL(feedUrl)
 
-            // Count word frequencies
-            words.forEach((word) => {
-                if (word.length > 3) {
-                    // Skip short words
-                    wordFreq.set(word, (wordFreq.get(word) || 0) + 1)
-                }
-            })
-
-            // Convert to array and sort by frequency
-            const sortedWords = Array.from(wordFreq.entries())
-                .sort((a, b) => b[1] - a[1])
-                .map(([word]) => word)
-                .slice(0, 5)
-
-            return sortedWords
+            feed.items.map((item) => ({
+                title: item.title || '',
+                description: item.description || item.summary || '',
+                pubDate: item.pubDate ? new Date(item.pubDate) : new Date(),
+                sourceUrl: item.link || ''
+            }))
+            console.log(feed)
+            return feed.items
         } catch (error) {
-            this.logger.error(
-                `Error in fallback topic extraction: ${error.message}`
-            )
-            return []
+            this.logger.error(`Failed to parse feed: ${error.message}`)
+            throw error
         }
     }
 }

@@ -6,7 +6,8 @@ import { TypeOrmModule } from '@nestjs/typeorm'
 import { typeOrmAsyncConfig } from 'src/config/typeorm.config'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
-import { SourceConfigurationModule } from './modules/source-configuration/source-configuration.module';
+import { SourceConfigurationModule } from './modules/source-configuration/source-configuration.module'
+import { TopicExtractionModule } from './modules/topic-extraction/topic-extraction.module'
 @Module({
     imports: [
         ConfigModule.forRoot({
@@ -31,7 +32,8 @@ import { SourceConfigurationModule } from './modules/source-configuration/source
         }),
         TypeOrmModule.forRootAsync(typeOrmAsyncConfig),
         ScheduleModule.forRoot(),
-        SourceConfigurationModule
+        SourceConfigurationModule,
+        TopicExtractionModule
     ],
     controllers: [AppController],
     providers: [AppService],

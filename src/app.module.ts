@@ -4,10 +4,10 @@ import { ScheduleModule } from '@nestjs/schedule'
 import { ThrottlerModule } from '@nestjs/throttler'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { typeOrmAsyncConfig } from 'src/config/typeorm.config'
+import { ArticleModule } from './modules/article/article.module'
+import { ExtractorModule } from './modules/extractor/extractor.module'
+import { RssFeedParserModule } from './modules/rss-feed-parser/rss-feed-parser.module'
 import { SourceConfigurationModule } from './modules/source-configuration/source-configuration.module'
-import { TopicExtractionModule } from './modules/topic-extraction/topic-extraction.module'
-import { ArticleModule } from './modules/article/article.module';
-import { RssFeedParserModule } from './modules/rss-feed-parser/rss-feed-parser.module';
 @Module({
     imports: [
         ConfigModule.forRoot({
@@ -33,9 +33,9 @@ import { RssFeedParserModule } from './modules/rss-feed-parser/rss-feed-parser.m
         TypeOrmModule.forRootAsync(typeOrmAsyncConfig),
         ScheduleModule.forRoot(),
         SourceConfigurationModule,
-        TopicExtractionModule,
         ArticleModule,
-        RssFeedParserModule
+        RssFeedParserModule,
+        ExtractorModule
     ],
     exports: [TypeOrmModule]
 })

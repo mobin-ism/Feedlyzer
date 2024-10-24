@@ -1,5 +1,6 @@
 import { CustomBaseEntity } from 'src/common/entity/custom-base.entity'
-import { Column, Entity } from 'typeorm'
+import { Column, Entity, OneToMany } from 'typeorm'
+import { ArticleInsight } from './article-insight.entity'
 
 @Entity()
 export class Article extends CustomBaseEntity {
@@ -29,4 +30,13 @@ export class Article extends CustomBaseEntity {
         nullable: true
     })
     sourceUrl: string
+
+    @OneToMany(
+        () => ArticleInsight,
+        (articleInsight) => articleInsight.article,
+        {
+            cascade: true
+        }
+    )
+    insights: ArticleInsight[]
 }

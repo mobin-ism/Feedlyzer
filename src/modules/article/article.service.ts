@@ -6,6 +6,7 @@ import {
     Pagination
 } from 'nestjs-typeorm-paginate'
 import { FindOptionsOrder, ILike, Repository } from 'typeorm'
+import { ExtractorService } from '../extractor/extractor.service'
 import { RssFeedParserService } from '../rss-feed-parser/rss-feed-parser.service'
 import { SourceConfigurationService } from '../source-configuration/source-configuration.service'
 import { CreateArticleDto } from './dto/create-article.dto'
@@ -17,7 +18,8 @@ export class ArticleService {
         @InjectRepository(Article)
         private readonly articleRepository: Repository<Article>,
         private readonly sourceConfigurationService: SourceConfigurationService,
-        private readonly rssFeedParserService: RssFeedParserService
+        private readonly rssFeedParserService: RssFeedParserService,
+        private readonly extrractorService: ExtractorService
     ) {}
 
     /**
@@ -50,7 +52,20 @@ export class ArticleService {
                     article.description = item.description
                     article.publicationDate = item.pubDate
                     article.sourceUrl = item.sourceUrl
-                    return await this.articleRepository.save(article)
+                    const aboutToCreateArticle =
+                        this.articleRepository.create(article)
+                    const insights = await this.extrractorService.extractInfo(
+                        aboutToCreateArticle.title,
+                        aboutToCreateArticle.description
+                    )
+                    aboutToCreateArticle.insights = insights
+
+                    const createdArticle =
+                        await this.articleRepository.save(aboutToCreateArticle)
+
+                    setTimeout(() => {
+                        return createdArticle
+                    }, 1000)
                 })
             }
 

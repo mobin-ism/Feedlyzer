@@ -109,6 +109,11 @@ export class BatchExtractorService {
             try {
                 const createdArticleInsights =
                     await this.articleInsightRepository.save(articleInsights)
+                // UPDATE THE STATUS OF THE ARTICLE TO PROCESSED
+                await this.articleService.updateStatusToProcessed(
+                    createdArticleInsights.articleId,
+                    true
+                )
                 //LETS PUSH THE DATA TO THE ARTICLE DOCUMENTS OF MEILISEARCH
                 this.articleService.addArticleDocuments(createdArticleInsights)
                 return
@@ -120,7 +125,7 @@ export class BatchExtractorService {
                     )
                     throw error
                 }
-                await sleep(1000 * (i + 1)) // Exponential backoff
+                await sleep(1000 * (i + 1))
             }
         }
     }

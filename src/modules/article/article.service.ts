@@ -7,6 +7,8 @@ import {
     OnModuleInit
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { EventEmitter2 } from '@nestjs/event-emitter'
+import { Cron, CronExpression } from '@nestjs/schedule'
 import { InjectRepository } from '@nestjs/typeorm'
 import MeiliSearch from 'meilisearch'
 import {
@@ -47,7 +49,8 @@ export class ArticleService implements OnModuleInit {
         private readonly rssFeedParserService: RssFeedParserService,
         @Inject(forwardRef(() => BatchExtractorService))
         private readonly batchExtractorService: BatchExtractorService,
-        private configService: ConfigService
+        private configService: ConfigService,
+        private eventEmitter: EventEmitter2
     ) {}
 
     onModuleInit() {
@@ -276,8 +279,6 @@ export class ArticleService implements OnModuleInit {
             limit: 10000
         }
 
-        
-
         // Construct filters based on the optional parameters
         // const filters: string[] = []
         // if (title) {
@@ -341,5 +342,53 @@ export class ArticleService implements OnModuleInit {
                 category: articleInsight.category
             }
         ]
+    }
+
+    /**
+     * CHANGE THE STATUS OF AN ARTICLE
+     */
+    async updateStatusToProcessed(id: number, isProcessed: boolean) {
+        const article = await this.articleRepository.findOne({
+            where: { id }
+        })
+        if (!article) {
+            throw new HttpException('Article not found', HttpStatus.NOT_FOUND)
+        }
+        article.isProcessed = isProcessed ? true : false
+        return await this.articleRepository.save(article)
+    }
+
+    /**
+     * ADD A CRON JOB FOR FETCHING ARTICLES ON EVERY DAY AT 10:00 AM
+     */
+    @Cron(CronExpression.EVERY_DAY_AT_10AM)
+    async parseRssFeedOnRegularBasis() {
+        const sourceConfigurations =
+            await this.sourceConfigurationService.findAll()
+        if (sourceConfigurations.length === 0) {
+            console.log('No source configurations found')
+            return
+        }
+        for (const sourceConfiguration of sourceConfigurations) {
+            await this.fetch({
+                sourceConfigurationUuid: sourceConfiguration.uuid
+            })
+        }
+
+        await this.processUnprocessedArticles()
+    }
+
+    /**
+     * PROCESS UNPROCESSED ARTICLES
+     */
+    async processUnprocessedArticles() {
+        const articles = await this.articleRepository.find({
+            where: { isProcessed: false }
+        })
+        if (articles.length === 0) {
+            console.log('No unprocessed articles found')
+            return
+        }
+        await this.batchExtractorService.processArticles(articles)
     }
 }

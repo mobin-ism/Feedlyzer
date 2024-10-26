@@ -40,4 +40,11 @@ export class Article extends CustomBaseEntity {
         }
     )
     insights: ArticleInsight
+
+    @Column({
+        type: 'boolean',
+        nullable: false,
+        default: false
+    })
+    isProcessed: boolean
 }

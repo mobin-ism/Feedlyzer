@@ -1,26 +1,65 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
+import {
+    forwardRef,
+    HttpException,
+    HttpStatus,
+    Inject,
+    Injectable,
+    OnModuleInit
+} from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { InjectRepository } from '@nestjs/typeorm'
+import MeiliSearch from 'meilisearch'
 import {
     IPaginationOptions,
     paginate,
     Pagination
 } from 'nestjs-typeorm-paginate'
 import { FindOptionsOrder, ILike, Repository } from 'typeorm'
-import { ExtractorService } from '../extractor/extractor.service'
+import { BatchExtractorService } from '../extractor/batch-extractor.service'
 import { RssFeedParserService } from '../rss-feed-parser/rss-feed-parser.service'
 import { SourceConfigurationService } from '../source-configuration/source-configuration.service'
 import { CreateArticleDto } from './dto/create-article.dto'
+import { ArticleInsight } from './entities/article-insight.entity'
 import { Article } from './entities/article.entity'
 
+interface ArticleDocument {
+    id: number
+    title: string
+    description: string
+    publicationDate: string
+    sourceUrl: string
+    topics: string
+    keywords: string
+    people: string
+    organizations: string
+    locations: string
+    category: string
+}
+
 @Injectable()
-export class ArticleService {
+export class ArticleService implements OnModuleInit {
     constructor(
         @InjectRepository(Article)
         private readonly articleRepository: Repository<Article>,
+        @InjectRepository(ArticleInsight)
+        private readonly articleInsightRepository: Repository<ArticleInsight>,
         private readonly sourceConfigurationService: SourceConfigurationService,
         private readonly rssFeedParserService: RssFeedParserService,
-        private readonly extrractorService: ExtractorService
+        @Inject(forwardRef(() => BatchExtractorService))
+        private readonly batchExtractorService: BatchExtractorService,
+        private configService: ConfigService
     ) {}
+
+    onModuleInit() {
+        this.initializeIndex()
+    }
+    /**
+     * INITIALIZING MEILISEARCH CLIENT
+     */
+    private _client = new MeiliSearch({
+        host: this.configService.get<string>('MEILISEARCH_URL'),
+        apiKey: this.configService.get<string>('MEILI_MASTER_KEY')
+    })
 
     /**
      * FETCHING ALL THE ARTICLES FROM A SOURCE CONFIGURATION
@@ -46,31 +85,24 @@ export class ArticleService {
                 const feedItems =
                     await this.rssFeedParserService.parseFeed(source)
 
-                feedItems.map(async (item) => {
+                for (const feedItem of feedItems) {
                     const article = new Article()
-                    article.title = item.title
-                    article.description = item.description
-                    article.publicationDate = item.pubDate
-                    article.sourceUrl = item.sourceUrl
+                    article.title = feedItem.title
+                    article.description = feedItem.description
+                    article.publicationDate = feedItem.pubDate
+                    article.sourceUrl = feedItem.sourceUrl
                     const aboutToCreateArticle =
                         this.articleRepository.create(article)
-                    const insights = await this.extrractorService.extractInfo(
-                        aboutToCreateArticle.title,
-                        aboutToCreateArticle.description
-                    )
-                    aboutToCreateArticle.insights = insights
-
-                    const createdArticle =
-                        await this.articleRepository.save(aboutToCreateArticle)
-
-                    setTimeout(() => {
-                        return createdArticle
-                    }, 1000)
-                })
+                    await this.articleRepository.save(aboutToCreateArticle)
+                }
             }
+
+            const articles = await this.articleRepository.find()
+            await this.batchExtractorService.processArticles(articles)
 
             return true
         } catch (error) {
+            console.log(error)
             throw new HttpException(
                 'Failed to fetch articles',
                 HttpStatus.INTERNAL_SERVER_ERROR
@@ -135,5 +167,179 @@ export class ArticleService {
             throw new HttpException('Data not found', HttpStatus.NOT_FOUND)
         }
         return await this.articleRepository.remove(previousData)
+    }
+
+    /**
+     * GENERATING ARTICLE INDEX
+     * @returns
+     */
+    private getArticleIndex() {
+        const index = this._client.index('article')
+        index.updateSortableAttributes(['publicationDate', 'title', 'category'])
+        index.updateFilterableAttributes([
+            'title',
+            'topics',
+            'category',
+            'keywords',
+            'people',
+            'organizations',
+            'locations',
+            'publicationDate'
+        ])
+        return index
+    }
+
+    async initializeIndex() {
+        const index = this.getArticleIndex()
+        await index.updateSettings({
+            searchableAttributes: [
+                'title',
+                'description',
+                'topics',
+                'keywords',
+                'people',
+                'organizations',
+                'locations',
+                'category'
+            ],
+            filterableAttributes: [
+                'title',
+                'topics',
+                'category',
+                'keywords',
+                'people',
+                'organizations',
+                'locations',
+                'publicationDate'
+            ],
+            sortableAttributes: ['publicationDate', 'title', 'category']
+        })
+    }
+
+    // ADD ARTICLE IN MEILISEARCH
+    async addArticleDocuments(articleInsights: ArticleInsight) {
+        const document = await this.prepareArticleDocument(articleInsights)
+        const index = this.getArticleIndex()
+        return index.addDocuments(document)
+    }
+
+    // REMOVE ARTICLE FROM MEILISEARCH
+    private deleteArticleDocuments(article: Article) {
+        const index = this.getArticleIndex()
+        return index.deleteDocument(article.id)
+    }
+
+    // INSERT ALL THE ARTICLES IN MEILISEARCH
+    async insertAllTheArticlesToMeilisearch() {
+        this.removeAllTheArticleFromMeilisearch()
+        const articleInsights = await this.articleInsightRepository.find()
+        for (const articleInsight of articleInsights) {
+            await this.addArticleDocuments(articleInsight)
+        }
+    }
+
+    // REMOVE ALL THE ARTICLES FROM MEILISEARCH
+    async removeAllTheArticleFromMeilisearch() {
+        const index = this.getArticleIndex()
+        try {
+            return await index.deleteAllDocuments()
+        } catch (error) {
+            console.error('Error removing documents from MeiliSearch:', error)
+        }
+    }
+
+    // SEARCH ARTICLE BASED ON MEILISEARCH KEYWORD
+    async findByKeyword(
+        keyword?: string,
+        title?: string,
+        category?: string,
+        people?: string,
+        organizations?: string,
+        locations?: string,
+        topics?: string,
+        publicationDate?: string
+    ) {
+        const searchOptions: any = {
+            attributesToRetrieve: [
+                'title',
+                'description',
+                'publicationDate',
+                'sourceUrl',
+                'topics',
+                'keywords',
+                'people',
+                'organizations',
+                'locations',
+                'category'
+            ],
+            sort: ['title:asc'],
+            limit: 10000
+        }
+
+        
+
+        // Construct filters based on the optional parameters
+        // const filters: string[] = []
+        // if (title) {
+        //     filters.push(`title = "${title}"`)
+        // }
+        // if (category) {
+        //     filters.push(`category = "${category}"`)
+        // }
+        // if (people) {
+        //     filters.push(`people = "${people}"`)
+        // }
+        // if (organizations) {
+        //     filters.push(`organizations = "${organizations}"`)
+        // }
+        // if (locations) {
+        //     filters.push(`locations = "${locations}"`)
+        // }
+        // if (topics) {
+        //     filters.push(`topics = "${topics}"`)
+        // }
+        // if (publicationDate) {
+        //     filters.push(`publicationDate = "${publicationDate}"`)
+        // }
+
+        // // Add filters to search options if there are any
+        // if (filters.length > 0) {
+        //     searchOptions.filter = filters.join(' AND ')
+        // }
+
+        // // Add filters to search options if there are any
+        // if (filters.length > 0) {
+        //     searchOptions.filter = filters.join(' AND ')
+        // }
+
+        const searchResponse = await this.getArticleIndex().search(
+            keyword || '',
+            searchOptions
+        )
+
+        return searchResponse.hits
+    }
+
+    // PREPARE ARTICLE DOCUMENT
+    private async prepareArticleDocument(articleInsight: ArticleInsight) {
+        const article = await this.articleRepository.findOne({
+            where: { id: articleInsight.articleId }
+        })
+
+        return [
+            {
+                id: article.id,
+                title: article.title,
+                description: article.description,
+                publicationDate: article.publicationDate,
+                sourceUrl: article.sourceUrl,
+                topics: articleInsight.topics,
+                keywords: articleInsight.keywords,
+                people: articleInsight.people,
+                organizations: articleInsight.organizations,
+                locations: articleInsight.locations,
+                category: articleInsight.category
+            }
+        ]
     }
 }

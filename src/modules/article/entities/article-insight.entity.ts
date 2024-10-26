@@ -1,5 +1,5 @@
 import { CustomBaseEntity } from 'src/common/entity/custom-base.entity'
-import { Column, Entity, ManyToOne } from 'typeorm'
+import { Column, Entity, ManyToOne, OneToOne } from 'typeorm'
 import { Article } from './article.entity'
 
 @Entity()
@@ -10,7 +10,7 @@ export class ArticleInsight extends CustomBaseEntity {
     })
     articleId: number
 
-    @ManyToOne(() => Article, (article) => article.insights, {
+    @OneToOne(() => Article, (article) => article.insights, {
         onDelete: 'CASCADE'
     })
     article: Article
@@ -48,7 +48,15 @@ export class ArticleInsight extends CustomBaseEntity {
     @Column({
         type: 'varchar',
         length: 255,
-        nullable: true
+        nullable: true,
+        default: 'Unknown'
     })
     category: string
+
+    @Column({
+        type: 'varchar',
+        length: 255,
+        nullable: false
+    })
+    status: 'success' | 'failed'
 }

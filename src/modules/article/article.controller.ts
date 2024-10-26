@@ -101,6 +101,84 @@ export class ArticleController {
         }
     }
 
+    @Get('search')
+    @ApiOperation({
+        summary: 'Searching for articles based on properties'
+    })
+    @ApiResponse({ description: 'Bad Request', status: HttpStatus.BAD_REQUEST })
+    @ApiResponse({
+        description: 'Something went wrong',
+        status: HttpStatus.INTERNAL_SERVER_ERROR
+    })
+    @ApiResponse({
+        description: 'Data found successfully',
+        status: HttpStatus.OK
+    })
+    // @ApiQuery({
+    //     name: 'title',
+    //     required: false,
+    //     type: String,
+    //     description: 'Title of the article'
+    // })
+    @ApiQuery({
+        name: 'keyword',
+        required: false,
+        type: String,
+        description: 'Search by keyword'
+    })
+    // @ApiQuery({
+    //     name: 'category',
+    //     required: false,
+    //     type: String,
+    //     description: 'Category of the article'
+    // })
+    // @ApiQuery({
+    //     name: 'people',
+    //     required: false,
+    //     type: String,
+    //     description: 'People in the article'
+    // })
+    // @ApiQuery({
+    //     name: 'organizations',
+    //     required: false,
+    //     type: String,
+    //     description: 'Organizations in the article'
+    // })
+    // @ApiQuery({
+    //     name: 'locations',
+    //     required: false,
+    //     type: String,
+    //     description: 'Locations in the article'
+    // })
+    // @ApiQuery({
+    //     name: 'publicationDate',
+    //     required: false,
+    //     type: String,
+    //     description: 'Publication date in the article'
+    // })
+    // @ApiQuery({
+    //     name: 'topics',
+    //     required: false,
+    //     type: String,
+    //     description: 'Topic in the article'
+    // })
+    async search(
+        @Query('keyword') keyword: string
+        // @Query('title') title: string,
+        // @Query('category') category: string,
+        // @Query('people') people: string,
+        // @Query('organizations') organizations: string,
+        // @Query('locations') locations: string,
+        // @Query('publicationDate') publicationDate: string,
+        // @Query('topics') topics: string
+    ) {
+        return {
+            status: HttpStatus.OK,
+            message: 'Data found',
+            result: await this.articleService.findByKeyword(keyword)
+        }
+    }
+
     @Get(':uuid')
     @ApiOperation({ summary: 'Fetch article by UUID' })
     @ApiResponse({ description: 'Bad Request', status: HttpStatus.BAD_REQUEST })

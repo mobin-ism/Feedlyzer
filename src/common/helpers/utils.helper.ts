@@ -25,3 +25,6 @@ export class DateUtil {
         )
     }
 }
+// Utility function for sleep
+export const sleep = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms))

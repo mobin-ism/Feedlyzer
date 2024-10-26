@@ -16,11 +16,12 @@
     - Stores fetched news articles in **PostgreSQL** using **TypeORM**.
     - Stores fields such as title, description, publication date, source URL, and extracted topics like: keywords, people, locations, organizations.
 
-3. **Topic Extraction**:
+3. **Batch Topic Extraction**:
 
     - Extracts topics, keywords, and named entities using **GroqCloud** for AI model integration.
+    - Supports **batch processing** of articles to efficiently extract topics and entities in bulk.
     - AI-powered topic extraction and classification of articles.
-    - Perform named entity recognition (people, locations, organizations) on news articles.
+    - Performs named entity recognition (people, locations, organizations) on news articles.
 
 4. **Lightning-fast Search API - Meilisearch Integration**:
 

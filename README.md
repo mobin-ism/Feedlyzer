@@ -123,3 +123,7 @@
 ## Additional Notes
 
 -   **Scheduler**: A scheduler is configured to periodically fetch and process new articles.
+
+## Improvements
+
+-   **Background Jobs**: A background job can be integrated for large data extraction using HTTP request.

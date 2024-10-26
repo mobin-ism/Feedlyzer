@@ -1,12 +1,67 @@
 version: '3'
 services:
-    nestjs-starter-kit:
+    postgres:
+        container_name: postgres-container
+        image: postgres
+        restart: always
+        environment:
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=pLSkczmWBHK0CVh
+            - POSTGRES_DB=feedlyzer
+        ports:
+            - '5432:5432'
+        volumes:
+            - /home/ubuntu/pg-data:/var/lib/postgresql/data/:rw
+            - ./sql/prod-init.sql:/docker-entrypoint-initdb.d/init.sql
+
+    meilisearch:
+        container_name: meilisearch-container
+        image: getmeili/meilisearch:v1.3
+        environment:
+            - MEILI_MASTER_KEY=RJvePDvNN8xbz3s415pBekkAdQEA0jaH
+        ports:
+            - 7700:7700
+        volumes:
+            - /home/ubuntu/meili_data:/meili_data/:rw
+        restart: always
+
+    feedlyzer-backend:
+        container_name: feedlyzer-backend
+        ports:
+            - 3000:3000
+        restart: always
         build:
             context: .
             dockerfile: ./Dockerfile
-        image: nestjs-starter-kit
-        ports:
-            - '80:3000'
-        container_name: nestjs-starter-kit
-        volumes:
-            - /app/node_modules
+        image: feedlyzer-backend
+        environment:
+            - APP_ENV=development
+            - APP_PORT=3000
+            - APP_EXPIRES=3600
+            - APP_SECRET=3QANyH2zMoHrfxqfRWTLbPM
+            - APP_URL=http://localhost:3000
+            - CLIENT_APP_URL=http://localhost:3000
+
+            # DEVELOPMENT ENVIRONMENT
+            - DB_HOST=postgres
+            - DB_PORT=5432
+            - DB_USERNAME=postgres
+            - DB_PASSWORD=pLSkczmWBHK0CVh
+            - DB_NAME=feedlyzer
+
+            #MEILISEARCH CREDENTIALS
+            - MEILISEARCH_URL=http://meilisearch:7700
+            - MEILI_MASTER_KEY=RJvePDvNN8xbz3s415pBekkAdQEA0jaH
+
+            #MISC
+            - DEFAULT_PAGE_SIZE=25
+            - RATE_LIMITER_TIME_TO_LEAVE=6000 #MILLISECONDS
+            - RATE_LIMITER_MAX_TRY=60
+            - HUGGING_FACE_TOKEN=hugging-face-api-key
+            - GEMINI_API_KEY=gemini-api-key
+            - OPENAI_API_KEY=open-ai-api-key
+            - GROQ_API_KEY=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
+
+        depends_on:
+            - meilisearch
+            - postgres
